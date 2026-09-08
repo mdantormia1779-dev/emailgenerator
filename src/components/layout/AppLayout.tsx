@@ -1,8 +1,18 @@
+'use client';
+
 import React from 'react';
+import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { Navbar } from './Navbar';
 
 export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const pathname = usePathname();
+  const isAuthPage = pathname === '/login' || pathname === '/signup';
+
+  if (isAuthPage) {
+    return <main className="min-h-screen bg-slate-50">{children}</main>;
+  }
+
   return (
     <div className="min-h-screen flex bg-slate-50 text-slate-900">
       <Sidebar />

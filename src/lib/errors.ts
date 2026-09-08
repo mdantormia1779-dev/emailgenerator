@@ -12,6 +12,13 @@ export class AppError extends Error {
   }
 }
 
+export class UnauthorizedError extends AppError {
+  constructor(message = 'Authentication required. Please sign in.') {
+    super(message, 401);
+    this.name = 'UnauthorizedError';
+  }
+}
+
 export function formatErrorResponse(error: unknown): {
   success: false;
   error: string;

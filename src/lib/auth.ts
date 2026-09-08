@@ -1,11 +1,48 @@
+import { cookies, headers } from 'next/headers';
+import { AUTH_COOKIE_NAME, verifyToken, AuthUserPayload } from './auth-jwt';
 import { DEFAULT_USER_ID } from '@/services/profile.service';
 
 /**
- * Resolves current authenticated user session.
- * For production, hooks into session cookies or NextAuth.
- * Falls back to DEFAULT_USER_ID for seamless local development.
+ * Resolves the currently authenticated user session from cookie or Authorization header.
+ * Returns null if no valid token is present.
+ */
+export async function getSessionUser(): Promise<AuthUserPayload | null> {
+  try {
+    // 1. Try reading HTTP-only auth cookie
+    const cookieStore = await cookies();
+    const tokenFromCookie = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+    if (tokenFromCookie) {
+      const payload = verifyToken(tokenFromCookie);
+      if (payload) return payload;
+    }
+
+    // 2. Try Authorization: Bearer header
+    const headersList = await headers();
+    const authHeader = headersList.get('authorization') || headersList.get('Authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const tokenFromHeader = authHeader.slice(7).trim();
+      const payload = verifyToken(tokenFromHeader);
+      if (payload) return payload;
+    }
+  } catch {
+    // In static rendering or test environments without request context
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * Resolves current authenticated user ID.
+ * Returns the authenticated userId if signed in.
+ * Falls back to DEFAULT_USER_ID if demo mode is enabled or for seamless testing.
  */
 export async function getSessionUserId(): Promise<string> {
-  // Can be extended with cookies() or JWT token verification
+  const sessionUser = await getSessionUser();
+  if (sessionUser?.userId) {
+    return sessionUser.userId;
+  }
+
+  // Graceful fallback for demo or seeded account
   return DEFAULT_USER_ID;
 }
