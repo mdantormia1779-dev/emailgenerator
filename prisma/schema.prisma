@@ -1,0 +1,247 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String             @id @default(cuid())
+  email             String             @unique
+  name              String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  profile           Profile?
+  resumes           Resume[]
+  applications      JobApplication[]
+  gmailAccount      GmailAccount?
+  facebookPosts     FacebookPost[]
+  scannerPreference ScannerPreference?
+
+  @@index([email])
+}
+
+model Profile {
+  id                String       @id @default(cuid())
+  userId            String       @unique
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName          String
+  title             String
+  yearsOfExperience Int          @default(0)
+  summary           String       @db.Text
+  skills            String[]     @default([])
+  github            String?
+  linkedin          String?
+  portfolio         String?
+  phone             String?
+  location          String?
+  projects          Project[]
+  experiences       Experience[]
+  education         Education[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([userId])
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  profileId   String
+  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title       String
+  description String   @db.Text
+  techStack   String[] @default([])
+  liveUrl     String?
+  githubUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([profileId])
+}
+
+model Experience {
+  id           String    @id @default(cuid())
+  profileId    String
+  profile      Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  company      String
+  role         String
+  location     String?
+  startDate    String
+  endDate      String?
+  isCurrent    Boolean   @default(false)
+  description  String    @db.Text
+  achievements String[]  @default([])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([profileId])
+}
+
+model Education {
+  id           String   @id @default(cuid())
+  profileId    String
+  profile      Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  institution  String
+  degree       String
+  fieldOfStudy String
+  startYear    Int
+  endYear      Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([profileId])
+}
+
+model Resume {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileName     String
+  originalName String
+  mimeType     String
+  fileSize     Int
+  filePath     String
+  isDefault    Boolean          @default(false)
+  uploadedAt   DateTime         @default(now())
+  applications JobApplication[]
+
+  @@index([userId])
+  @@index([isDefault])
+}
+
+enum ApplicationStatus {
+  DRAFT
+  ANALYZED
+  GENERATED
+  REVIEWED
+  SENT
+  SHORTLISTED
+  INTERVIEW
+  REJECTED
+  OFFER
+  WITHDRAWN
+}
+
+model JobApplication {
+  id                String             @id @default(cuid())
+  userId            String
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName       String
+  jobTitle          String
+  jobUrl            String?
+  jobDescription    String             @db.Text
+  workType          String?            // Remote, Hybrid, Onsite
+  location          String?
+  recipientEmail    String?
+  subject           String?
+  emailBody         String?            @db.Text
+  resumeId          String?
+  resume            Resume?            @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+  status            ApplicationStatus  @default(DRAFT)
+  matchScore        Int?
+  matchBreakdown    Json?
+  providerMessageId String?
+  sentAt            DateTime?
+  notes             String?            @db.Text
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  emails            Email[]
+  events            ApplicationEvent[]
+  facebookPost      FacebookPost?
+
+  @@index([userId])
+  @@index([status])
+  @@index([recipientEmail])
+  @@index([createdAt])
+}
+
+model Email {
+  id                String         @id @default(cuid())
+  applicationId     String
+  application       JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromEmail         String
+  toEmail           String
+  subject           String
+  body              String         @db.Text
+  providerMessageId String?
+  sentAt            DateTime       @default(now())
+
+  @@index([applicationId])
+}
+
+model GmailAccount {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email                 String
+  encryptedAccessToken  String   @db.Text
+  encryptedRefreshToken String   @db.Text
+  tokenExpiry           DateTime
+  isConnected           Boolean  @default(true)
+  connectedAt           DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([userId])
+}
+
+enum EventType {
+  STATUS_CHANGED
+  EMAIL_GENERATED
+  EMAIL_EDITED
+  EMAIL_SENT
+  NOTE_ADDED
+  RESUME_ATTACHED
+  DRAFT_GENERATED_FROM_FACEBOOK
+}
+
+model ApplicationEvent {
+  id            String         @id @default(cuid())
+  applicationId String
+  application   JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  eventType     EventType
+  description   String
+  metadata      Json?
+  createdAt     DateTime       @default(now())
+
+  @@index([applicationId])
+  @@index([createdAt])
+}
+
+model FacebookPost {
+  id               String          @id @default(cuid())
+  userId           String
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postUrl          String?
+  postHash         String          @unique // SHA-256 content hash for deduplication
+  rawContent       String          @db.Text
+  extractedTitle   String?
+  extractedCompany String?
+  extractedEmail   String?
+  extractedSkills  String[]        @default([])
+  matchScore       Int?
+  isRelevant       Boolean         @default(false)
+  isIgnored        Boolean         @default(false)
+  applicationId    String?         @unique
+  application      JobApplication? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  scannedAt        DateTime        @default(now())
+
+  @@index([userId])
+  @@index([isRelevant])
+  @@index([isIgnored])
+  @@index([postHash])
+}
+
+model ScannerPreference {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetKeywords    String[] @default(["Frontend Developer", "React Developer", "Next.js Developer", "MERN Stack Developer", "Full Stack Developer"])
+  minMatchScore     Int      @default(70)
+  targetGroupUrl    String?
+  autoGenerateDraft Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+}

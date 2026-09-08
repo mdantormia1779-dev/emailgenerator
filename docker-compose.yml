@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jobapply-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: jobapplyai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jobapply-app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "postgresql://postgres:postgrespassword@postgres:5432/jobapplyai?schema=public"
+      NODE_ENV: production
+      TOKEN_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      AUTH_SECRET: "production-secret-auth-key-minimum-32-characters"
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
+      GMAIL_CLIENT_ID: "${GMAIL_CLIENT_ID}"
+      GMAIL_CLIENT_SECRET: "${GMAIL_CLIENT_SECRET}"
+      GMAIL_REDIRECT_URI: "${GMAIL_REDIRECT_URI:-http://localhost:3000/api/integrations/gmail/callback}"
+      STORAGE_DIR: "/app/uploads/resumes"
+      DEMO_MODE: "${DEMO_MODE:-false}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - resume_uploads:/app/uploads/resumes
+
+volumes:
+  postgres_data:
+  resume_uploads:
