@@ -19,7 +19,9 @@ model User {
   resumes           Resume[]
   applications      JobApplication[]
   gmailAccount      GmailAccount?
+  metaAccount       MetaAccount?
   facebookPosts     FacebookPost[]
+  jobOpportunities  JobOpportunity[]
   scannerPreference ScannerPreference?
 
   @@index([email])
@@ -152,6 +154,7 @@ model JobApplication {
   emails            Email[]
   events            ApplicationEvent[]
   facebookPost      FacebookPost?
+  jobOpportunity    JobOpportunity?
 
   @@index([userId])
   @@index([status])
@@ -188,6 +191,23 @@ model GmailAccount {
   @@index([userId])
 }
 
+model MetaAccount {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metaUserId           String?
+  name                 String?
+  email                String?
+  encryptedAccessToken String    @db.Text
+  tokenExpiry          DateTime?
+  scopes               String[]  @default([])
+  isConnected          Boolean   @default(true)
+  connectedAt          DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([userId])
+}
+
 enum EventType {
   STATUS_CHANGED
   EMAIL_GENERATED
@@ -215,6 +235,8 @@ model FacebookPost {
   id               String          @id @default(cuid())
   userId           String
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source           String          @default("FACEBOOK")
+  sourcePostId     String?
   postUrl          String?
   postHash         String          @unique // SHA-256 content hash for deduplication
   rawContent       String          @db.Text
@@ -222,17 +244,27 @@ model FacebookPost {
   extractedCompany String?
   extractedEmail   String?
   extractedSkills  String[]        @default([])
+  location         String?
+  employmentType   String?
+  salary           String?
+  requirements     String[]        @default([])
   matchScore       Int?
+  matchReason      String?         @db.Text
+  status           String          @default("DISCOVERED") // DISCOVERED, MATCHED, EMAIL_GENERATED, REVIEW_REQUIRED, APPROVED, SENT, REJECTED
   isRelevant       Boolean         @default(false)
   isIgnored        Boolean         @default(false)
   applicationId    String?         @unique
   application      JobApplication? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  postedAt         DateTime?
+  discoveredAt     DateTime        @default(now())
   scannedAt        DateTime        @default(now())
 
   @@index([userId])
+  @@index([status])
   @@index([isRelevant])
   @@index([isIgnored])
   @@index([postHash])
+  @@index([sourcePostId])
 }
 
 model ScannerPreference {
@@ -246,4 +278,40 @@ model ScannerPreference {
   updatedAt         DateTime @updatedAt
 
   @@index([userId])
+}
+
+model JobOpportunity {
+  id            String          @id @default(cuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source        String          @default("FACEBOOK")
+  sourcePostId  String?
+  postHash      String?         @unique
+  title         String
+  company       String
+  description   String          @db.Text
+  location      String?
+  employmentType String?
+  salary        String?
+  postUrl       String?
+  contactEmail  String?
+  requirements  String[]        @default([])
+  skills        String[]        @default([])
+  postedAt      DateTime?
+  discoveredAt  DateTime        @default(now())
+  matchScore    Int             @default(0)
+  matchedSkills String[]        @default([])
+  matchReason   String?         @db.Text
+  status        String          @default("DISCOVERED") // DISCOVERED, MATCHED, EMAIL_GENERATED, REVIEW_REQUIRED, APPROVED, SENT, REJECTED
+  applicationId String?         @unique
+  application   JobApplication? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([source])
+  @@index([status])
+  @@index([matchScore])
+  @@index([sourcePostId])
+  @@index([postUrl])
 }

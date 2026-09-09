@@ -24,7 +24,7 @@ export const Sidebar: React.FC = () => {
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'New Application', href: '/applications/new', icon: PlusCircle, highlight: true },
-    { name: 'Facebook Scanner', href: '/facebook-scanner', icon: Sparkles },
+    { name: 'Meta Job Scanner', href: '/facebook-scanner', icon: Sparkles },
     { name: 'Applications', href: '/applications', icon: Briefcase },
     { name: 'Profile', href: '/profile', icon: User },
     { name: 'Resumes', href: '/resumes', icon: FileText },

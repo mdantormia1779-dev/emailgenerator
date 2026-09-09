@@ -208,15 +208,15 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Facebook Job Scanner Section */}
+      {/* Meta-supported Page Job Scanner Section */}
       <Card className="border-blue-200 bg-gradient-to-r from-blue-50/40 via-white to-indigo-50/30">
         <CardHeader
-          title="Facebook Job Feed Scanner"
-          subtitle="Automated post reader matching Frontend, React, Next.js, MERN & Full Stack roles"
+          title="Meta-supported Page Job Scanner"
+          subtitle="Official Graph API v26.0 discovery for Frontend, React, Next.js, MERN & Full Stack roles"
           action={
             <Link href="/facebook-scanner">
               <Button size="sm" variant="outline" rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
-                Open Facebook Scanner
+                Open Page Scanner
               </Button>
             </Link>
           }
