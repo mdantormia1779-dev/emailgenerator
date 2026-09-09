@@ -1,6 +1,7 @@
 import { cookies, headers } from 'next/headers';
 import { AUTH_COOKIE_NAME, verifyToken, AuthUserPayload } from './auth-jwt';
 import { DEFAULT_USER_ID } from '@/services/profile.service';
+import { UnauthorizedError } from './errors';
 
 /**
  * Resolves the currently authenticated user session from cookie or Authorization header.
@@ -32,10 +33,11 @@ export async function getSessionUser(): Promise<AuthUserPayload | null> {
   return null;
 }
 
+
 /**
  * Resolves current authenticated user ID.
  * Returns the authenticated userId if signed in.
- * Falls back to DEFAULT_USER_ID if demo mode is enabled or for seamless testing.
+ * Throws UnauthorizedError if not signed in.
  */
 export async function getSessionUserId(): Promise<string> {
   const sessionUser = await getSessionUser();
@@ -43,6 +45,5 @@ export async function getSessionUserId(): Promise<string> {
     return sessionUser.userId;
   }
 
-  // Graceful fallback for demo or seeded account
-  return DEFAULT_USER_ID;
+  throw new UnauthorizedError('Authentication required. Please sign in to continue.');
 }

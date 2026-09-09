@@ -134,7 +134,7 @@ export default function DashboardPage() {
         <Link href="/applications/new">
           <Button
             size="lg"
-            className="bg-white text-indigo-900 hover:bg-indigo-50 font-semibold shadow"
+            className="bg-indigo-50 font-semibold shadow"
             leftIcon={<PlusCircle className="w-5 h-5" />}
           >
             Start New Application

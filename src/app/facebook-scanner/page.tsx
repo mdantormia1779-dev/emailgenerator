@@ -3,27 +3,25 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  Sparkles,
   Search,
-  Filter,
-  RefreshCw,
   ExternalLink,
   Mail,
   CheckCircle2,
   XCircle,
-  Eye,
-  Sliders,
   Play,
   ArrowRight,
   ShieldCheck,
   Building2,
-  Trash2,
-  Layers,
   Plus,
+  Link2,
+  Copy,
+  Check,
+  Globe,
+  Radio,
+  FileText,
 } from 'lucide-react';
-import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/Card';
+import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import { Alert } from '@/components/ui/Alert';
 import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -42,7 +40,7 @@ export default function FacebookScannerPage() {
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Filter State
-  const [feedFilter, setFeedFilter] = useState<'all' | 'relevant' | 'drafts' | 'ignored'>('all');
+  const [feedFilter, setFeedFilter] = useState<'all' | 'relevant' | 'hasLink' | 'drafts' | 'ignored'>('all');
 
   // Preferences State
   const [preferences, setPreferences] = useState<ScannerPreferenceData>({
@@ -60,10 +58,16 @@ export default function FacebookScannerPage() {
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
   const [newKeywordInput, setNewKeywordInput] = useState('');
 
-  // Paste Feed Modal
-  const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
+  // Scan Modal State
+  const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [scanTab, setScanTab] = useState<'links' | 'text'>('links');
+  const [inputUrlsText, setInputUrlsText] = useState('');
   const [pastedContent, setPastedContent] = useState('');
   const [pastedUrl, setPastedUrl] = useState('');
+
+  // Live URL verification state map { [postId]: { verifying: boolean, isLive?: boolean, status?: number, title?: string } }
+  const [linkVerifications, setLinkVerifications] = useState<Record<string, any>>({});
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
   const fetchScannerData = async () => {
     try {
@@ -93,31 +97,107 @@ export default function FacebookScannerPage() {
     fetchScannerData();
   }, []);
 
-  // Trigger Automatic Feed Scan
-  const handleTriggerScan = async (customPosts?: any[]) => {
+  // Process Real URLs or Pasted Text
+  const handleProcessRealInput = async () => {
     setIsScanning(true);
     setFeedback(null);
+
     try {
+      let payload: any = {};
+
+      if (scanTab === 'links') {
+        const urls = inputUrlsText
+          .split('\n')
+          .map(u => u.trim())
+          .filter(u => u.length > 0);
+
+        if (urls.length === 0) {
+          throw new Error('Please enter at least one valid Facebook or job link URL.');
+        }
+
+        payload = { urls };
+      } else {
+        if (!pastedContent.trim()) {
+          throw new Error('Please paste the scrolled Facebook job post text.');
+        }
+
+        payload = {
+          posts: [
+            {
+              content: pastedContent.trim(),
+              postUrl: pastedUrl.trim() || null,
+            },
+          ],
+        };
+      }
+
       const res = await fetch('/api/facebook/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: customPosts ? JSON.stringify({ posts: customPosts }) : JSON.stringify({}),
+        body: JSON.stringify(payload),
       });
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Failed to scan Facebook feed');
+        throw new Error(json.error || 'Failed to scan and process job input');
       }
 
       setFeedback({ type: 'success', message: json.message });
       fetchScannerData();
-      setIsPasteModalOpen(false);
+      setIsScanModalOpen(false);
+      setInputUrlsText('');
       setPastedContent('');
+      setPastedUrl('');
     } catch (err: any) {
-      setFeedback({ type: 'error', message: err.message || 'Error scanning feed' });
+      setFeedback({ type: 'error', message: err.message || 'Error processing job input' });
     } finally {
       setIsScanning(false);
     }
+  };
+
+  // Verify Real Link Live
+  const handleVerifyLink = async (postId: string, url: string) => {
+    setLinkVerifications(prev => ({
+      ...prev,
+      [postId]: { verifying: true },
+    }));
+
+    try {
+      const res = await fetch('/api/facebook/verify-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+
+      const json = await res.json();
+      if (json.success && json.data) {
+        setLinkVerifications(prev => ({
+          ...prev,
+          [postId]: {
+            verifying: false,
+            isLive: json.data.isLive,
+            status: json.data.status,
+            title: json.data.title,
+          },
+        }));
+      } else {
+        setLinkVerifications(prev => ({
+          ...prev,
+          [postId]: { verifying: false, isLive: false, status: 0 },
+        }));
+      }
+    } catch {
+      setLinkVerifications(prev => ({
+        ...prev,
+        [postId]: { verifying: false, isLive: false, status: 0 },
+      }));
+    }
+  };
+
+  const handleCopyLink = (url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopiedLink(url);
+    setTimeout(() => setCopiedLink(null), 2000);
   };
 
   const handleIgnorePost = async (postId: string) => {
@@ -174,6 +254,7 @@ export default function FacebookScannerPage() {
 
   const filteredPosts = posts.filter(post => {
     if (feedFilter === 'relevant') return post.isRelevant && !post.isIgnored;
+    if (feedFilter === 'hasLink') return Boolean(post.postUrl);
     if (feedFilter === 'drafts') return post.applicationId !== null;
     if (feedFilter === 'ignored') return post.isIgnored;
     return true;
@@ -185,33 +266,39 @@ export default function FacebookScannerPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 p-6 rounded-2xl text-white shadow-md">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-semibold uppercase tracking-wider text-blue-300">
-              Social Job Discovery
+            <span className="text-xs font-semibold uppercase tracking-wider text-blue-300 flex items-center gap-1">
+              <Globe className="w-3.5 h-3.5" /> Real Job Scanner
             </span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Facebook Job Feed Scanner</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Facebook &amp; Social Job Scanner</h1>
           <p className="text-blue-200 text-xs mt-1 max-w-xl">
-            Automatically reads social job postings, matches target roles against your factual profile, and prepares tailored email drafts for your review.
+            Input real Facebook job post links or scrolled post content. The system parses requirements, checks candidate match, stores permanent records, and prepares custom email drafts using real Gemini AI.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <Button
             size="md"
-            variant="outline"
-            onClick={() => setIsPasteModalOpen(true)}
-            className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs"
+            onClick={() => {
+              setScanTab('links');
+              setIsScanModalOpen(true);
+            }}
+            className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow"
+            leftIcon={<Plus className="w-4 h-4" />}
           >
-            Paste Feed Text
+            Scan Real Job Links
           </Button>
           <Button
             size="md"
-            onClick={() => handleTriggerScan()}
-            isLoading={isScanning}
-            className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow"
-            leftIcon={<Play className="w-4 h-4 fill-white" />}
+            variant="outline"
+            onClick={() => {
+              setScanTab('text');
+              setIsScanModalOpen(true);
+            }}
+            className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs"
+            leftIcon={<FileText className="w-4 h-4" />}
           >
-            Scan Facebook Feed
+            Paste Scrolled Post
           </Button>
         </div>
       </div>
@@ -229,7 +316,7 @@ export default function FacebookScannerPage() {
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0" />
           <span>
-            <strong>Zero-Auto-Send Policy Enforced:</strong> The scanner only generates <strong>DRAFT</strong> emails. You maintain complete human review and must check all 4 confirmation boxes before any email is sent.
+            <strong>100% Real Records &amp; Zero-Auto-Send Policy:</strong> Every job link is stored and clickable so you can verify its authenticity. All emails are strictly saved as <strong>DRAFT</strong> for your full review.
           </span>
         </div>
       </div>
@@ -238,7 +325,7 @@ export default function FacebookScannerPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card className="p-4">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-            Scanned Posts
+            Real Posts Recorded
           </span>
           <span className="text-2xl font-extrabold text-slate-900 mt-1 block">
             {stats.totalScanned}
@@ -247,7 +334,7 @@ export default function FacebookScannerPage() {
 
         <Card className="p-4 border-indigo-200 bg-indigo-50/20">
           <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 block">
-            Relevant Jobs
+            Profile Matches
           </span>
           <span className="text-2xl font-extrabold text-indigo-900 mt-1 block">
             {stats.relevantJobs}
@@ -256,7 +343,7 @@ export default function FacebookScannerPage() {
 
         <Card className="p-4 border-emerald-200 bg-emerald-50/20">
           <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">
-            Email Drafts Ready
+            AI Email Drafts Ready
           </span>
           <span className="text-2xl font-extrabold text-emerald-900 mt-1 block">
             {stats.draftApplications}
@@ -276,8 +363,8 @@ export default function FacebookScannerPage() {
       {/* Matching Preferences Card */}
       <Card>
         <CardHeader
-          title="Job Matching Preferences"
-          subtitle="Customize which roles the scanner targets and the minimum profile match score required to generate a draft email"
+          title="Role Targeting &amp; Minimum Match Threshold"
+          subtitle="Customize which roles the scanner targets and the minimum profile score to synthesize a draft email"
           action={
             <Button
               size="sm"
@@ -290,7 +377,6 @@ export default function FacebookScannerPage() {
           }
         />
         <CardContent className="space-y-4">
-          {/* Target Role Keywords */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Target Role Keywords
@@ -301,7 +387,7 @@ export default function FacebookScannerPage() {
                 value={newKeywordInput}
                 onChange={e => setNewKeywordInput(e.target.value)}
                 onKeyDown={handleAddKeyword}
-                placeholder="Add role keyword (e.g. MERN Developer, React Developer)..."
+                placeholder="Add role keyword (e.g. MERN Developer, React Developer, Full Stack)..."
                 className="flex-1 px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
               />
               <Button type="button" size="sm" onClick={handleAddKeyword} leftIcon={<Plus className="w-3.5 h-3.5" />}>
@@ -327,12 +413,11 @@ export default function FacebookScannerPage() {
             </div>
           </div>
 
-          {/* Minimum Match Score Threshold */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
               <div className="flex justify-between items-center mb-1">
                 <label className="text-xs font-semibold text-slate-700">
-                  Minimum Match Score Threshold
+                  Minimum Profile Match Score Threshold
                 </label>
                 <span className="font-bold text-indigo-600 text-xs">{preferences.minMatchScore}%</span>
               </div>
@@ -348,7 +433,7 @@ export default function FacebookScannerPage() {
                 className="w-full accent-indigo-600"
               />
               <p className="text-[11px] text-slate-400 mt-1">
-                Posts scoring below {preferences.minMatchScore}% will be filtered out to prevent spam.
+                Posts scoring below {preferences.minMatchScore}% are marked below threshold to filter out noise.
               </p>
             </div>
 
@@ -363,7 +448,7 @@ export default function FacebookScannerPage() {
                 className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
               />
               <label htmlFor="autoDraft" className="text-xs text-slate-700 font-medium cursor-pointer">
-                <strong>Auto-generate Email Draft:</strong> When a post matches &gt;= {preferences.minMatchScore}%, automatically synthesize a factual draft email ready for your review.
+                <strong>Auto-generate AI Email Draft:</strong> When a real post scores &gt;= {preferences.minMatchScore}%, automatically write a factual email draft via Gemini AI ready for review.
               </label>
             </div>
           </div>
@@ -373,8 +458,8 @@ export default function FacebookScannerPage() {
       {/* Scanned Posts Feed & Review Section */}
       <Card>
         <CardHeader
-          title="Scanned Facebook Posts"
-          subtitle="Filtered opportunities discovered from social developer feeds"
+          title="Discovered Real Job Postings"
+          subtitle="Real job postings recorded with clickable links, contact emails, and match analysis"
           action={
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
               <button
@@ -391,7 +476,15 @@ export default function FacebookScannerPage() {
                   feedFilter === 'relevant' ? 'bg-white shadow-xs text-indigo-700' : 'text-slate-500'
                 }`}
               >
-                Relevant ({posts.filter(p => p.isRelevant && !p.isIgnored).length})
+                Matched ({posts.filter(p => p.isRelevant && !p.isIgnored).length})
+              </button>
+              <button
+                onClick={() => setFeedFilter('hasLink')}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition ${
+                  feedFilter === 'hasLink' ? 'bg-white shadow-xs text-blue-700' : 'text-slate-500'
+                }`}
+              >
+                With Links ({posts.filter(p => Boolean(p.postUrl)).length})
               </button>
               <button
                 onClick={() => setFeedFilter('drafts')}
@@ -424,192 +517,335 @@ export default function FacebookScannerPage() {
               <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
                 <Search className="w-6 h-6" />
               </div>
-              <h4 className="font-semibold text-slate-800 text-sm">No posts in this view</h4>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Click &quot;Scan Facebook Feed&quot; to ingest sample posts or paste custom group text.
+              <h4 className="font-semibold text-slate-800 text-sm">No recorded posts in this filter</h4>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Click <strong>&quot;Scan Real Job Links&quot;</strong> to input real Facebook job URLs or paste scrolled post content. Fake data has been removed.
               </p>
-              <Button size="sm" onClick={() => handleTriggerScan()} isLoading={isScanning}>
-                Run Scanner Now
+              <Button
+                size="sm"
+                onClick={() => {
+                  setScanTab('links');
+                  setIsScanModalOpen(true);
+                }}
+                leftIcon={<Plus className="w-4 h-4" />}
+              >
+                Input Real Job Links
               </Button>
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {filteredPosts.map(post => (
-                <div key={post.id} className="p-5 hover:bg-slate-50/70 transition space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-slate-900 text-sm">
-                          {post.extractedTitle || 'Software Position'}
-                        </h3>
-                        {post.matchScore !== null && (
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
-                              post.matchScore >= preferences.minMatchScore
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                : 'bg-slate-100 text-slate-600 border-slate-200'
-                            }`}
-                          >
-                            {post.matchScore}% Match
-                          </span>
-                        )}
-                        {post.applicationId && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">
-                            Email Draft Ready
-                          </span>
-                        )}
-                        {post.isIgnored && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500">
-                            Ignored
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                        <span className="font-medium text-slate-700 flex items-center gap-1">
-                          <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                          {post.extractedCompany}
-                        </span>
-                        <span>•</span>
-                        <span>Source: Facebook</span>
-                        <span>•</span>
-                        <span>{new Date(post.scannedAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
+              {filteredPosts.map(post => {
+                const verification = linkVerifications[post.id];
 
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-2 pt-1 sm:pt-0">
-                      {post.applicationId ? (
-                        <Link href={`/applications/${post.applicationId}`}>
-                          <Button size="sm" variant="primary" rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
-                            Review Email Draft
-                          </Button>
-                        </Link>
-                      ) : (
-                        post.isRelevant && (
-                          <Link href="/applications/new">
-                            <Button size="sm" variant="outline">
-                              Apply
+                return (
+                  <div key={post.id} className="p-5 hover:bg-slate-50/70 transition space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-bold text-slate-900 text-sm">
+                            {post.extractedTitle || 'Software Position'}
+                          </h3>
+                          {post.matchScore !== null && (
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                                post.matchScore >= preferences.minMatchScore
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                  : 'bg-slate-100 text-slate-600 border-slate-200'
+                              }`}
+                            >
+                              {post.matchScore}% Match
+                            </span>
+                          )}
+                          {post.applicationId && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">
+                              Email Draft Ready
+                            </span>
+                          )}
+                          {post.isIgnored && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500">
+                              Ignored
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                          <span className="font-medium text-slate-700 flex items-center gap-1">
+                            <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                            {post.extractedCompany}
+                          </span>
+                          <span>•</span>
+                          <span>Scanned: {new Date(post.scannedAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+
+                      {/* Top Action Buttons */}
+                      <div className="flex items-center gap-2 pt-1 sm:pt-0">
+                        {post.applicationId ? (
+                          <Link href={`/applications/${post.applicationId}`}>
+                            <Button size="sm" variant="primary" rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
+                              Review Email Draft
                             </Button>
                           </Link>
-                        )
-                      )}
+                        ) : (
+                          post.isRelevant && (
+                            <Link href="/applications/new">
+                              <Button size="sm" variant="outline">
+                                Apply Manually
+                              </Button>
+                            </Link>
+                          )
+                        )}
 
-                      {!post.isIgnored && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleIgnorePost(post.id)}
-                          className="text-slate-400 hover:text-slate-600 text-xs"
-                        >
-                          Ignore
-                        </Button>
-                      )}
-
-                      {post.postUrl && (
-                        <a
-                          href={post.postUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
-                          title="Open Facebook Post"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
-                      )}
+                        {!post.isIgnored && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleIgnorePost(post.id)}
+                            className="text-slate-400 hover:text-slate-600 text-xs"
+                          >
+                            Ignore
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Recipient Email & Detected Skills */}
-                  <div className="flex flex-wrap items-center gap-3 text-xs">
-                    {post.extractedEmail ? (
-                      <div className="flex items-center gap-1.5 font-mono text-slate-800 bg-slate-100 px-2 py-1 rounded">
-                        <Mail className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>{post.extractedEmail}</span>
+                    {/* Dedicated Job Link Box */}
+                    {post.postUrl ? (
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-blue-50/70 border border-blue-200/80 text-xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Link2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                          <span className="font-semibold text-slate-700 flex-shrink-0">Job Link:</span>
+                          <a
+                            href={post.postUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-700 font-mono underline truncate hover:text-blue-900"
+                            title={post.postUrl}
+                          >
+                            {post.postUrl}
+                          </a>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyLink(post.postUrl)}
+                            className="px-2 py-1 text-[11px] rounded-md bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 flex items-center gap-1 transition"
+                            title="Copy link to clipboard"
+                          >
+                            {copiedLink === post.postUrl ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-600" />
+                                <span className="text-emerald-600 font-semibold">Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleVerifyLink(post.id, post.postUrl)}
+                            disabled={verification?.verifying}
+                            className="px-2 py-1 text-[11px] rounded-md bg-white border border-blue-300 hover:bg-blue-50 text-blue-700 font-semibold flex items-center gap-1 transition"
+                          >
+                            {verification?.verifying ? (
+                              <span className="inline-block animate-spin">⟳</span>
+                            ) : (
+                              <Radio className="w-3 h-3" />
+                            )}
+                            Check Link
+                          </button>
+
+                          <a
+                            href={post.postUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-md bg-blue-600 hover:bg-blue-700 text-white transition shadow-xs"
+                          >
+                            <span>Open Post</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
                       </div>
                     ) : (
-                      <span className="text-slate-400 italic">No email found in post</span>
+                      <div className="text-[11px] text-slate-400 italic">No direct URL provided for this entry.</div>
                     )}
 
-                    {post.extractedSkills && post.extractedSkills.length > 0 && (
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {post.extractedSkills.map((s: string, idx: number) => (
-                          <span
-                            key={idx}
-                            className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700"
-                          >
-                            {s}
-                          </span>
-                        ))}
+                    {/* Live Verification Status Result */}
+                    {verification && !verification.verifying && (
+                      <div
+                        className={`text-xs p-2 rounded-lg flex items-center gap-2 ${
+                          verification.isLive
+                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                            : 'bg-rose-50 text-rose-800 border border-rose-200'
+                        }`}
+                      >
+                        {verification.isLive ? (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                            <span>
+                              <strong>Live Verified:</strong> Link responded with HTTP {verification.status || 200}.
+                              {verification.title ? ` Title: "${verification.title}"` : ''}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                            <span>
+                              <strong>Could Not Reach:</strong> The link did not respond with HTTP 200 or requires active login.
+                            </span>
+                          </>
+                        )}
                       </div>
                     )}
-                  </div>
 
-                  {/* Raw Post snippet */}
-                  <div className="text-xs text-slate-600 font-sans whitespace-pre-line bg-slate-50/80 p-3 rounded-lg border border-slate-200/60 line-clamp-3">
-                    {post.rawContent}
+                    {/* Contact Email & Detected Skills */}
+                    <div className="flex flex-wrap items-center gap-3 text-xs">
+                      {post.extractedEmail ? (
+                        <a
+                          href={`mailto:${post.extractedEmail}`}
+                          className="flex items-center gap-1.5 font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded hover:bg-indigo-100 transition"
+                          title="Click to draft email"
+                        >
+                          <Mail className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>{post.extractedEmail}</span>
+                        </a>
+                      ) : (
+                        <span className="text-slate-400 italic">No recipient email extracted</span>
+                      )}
+
+                      {post.extractedSkills && post.extractedSkills.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {post.extractedSkills.map((s: string, idx: number) => (
+                            <span
+                              key={idx}
+                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700"
+                            >
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Raw Content Snippet */}
+                    <div className="text-xs text-slate-600 font-sans whitespace-pre-line bg-slate-50/80 p-3 rounded-lg border border-slate-200/60 line-clamp-3">
+                      {post.rawContent}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Paste Feed Modal */}
+      {/* Real Job Links & Post Ingestion Modal */}
       <Modal
-        isOpen={isPasteModalOpen}
-        onClose={() => setIsPasteModalOpen(false)}
-        title="Paste Facebook Job Post / Feed"
+        isOpen={isScanModalOpen}
+        onClose={() => setIsScanModalOpen(false)}
+        title="Input Real Facebook Job Links or Posts"
       >
         <div className="space-y-4 text-xs">
-          <p className="text-slate-600">
-            Paste the raw text of one or more Facebook job postings from developer groups or hiring pages:
-          </p>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Facebook Post URL (Optional)
-            </label>
-            <input
-              type="url"
-              value={pastedUrl}
-              onChange={e => setPastedUrl(e.target.value)}
-              placeholder="https://facebook.com/groups/.../posts/..."
-              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-            />
+          {/* Navigation Tabs */}
+          <div className="flex border-b border-slate-200">
+            <button
+              type="button"
+              onClick={() => setScanTab('links')}
+              className={`pb-2 px-3 font-semibold text-xs border-b-2 transition ${
+                scanTab === 'links'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Scan Real URLs / Links
+            </button>
+            <button
+              type="button"
+              onClick={() => setScanTab('text')}
+              className={`pb-2 px-3 font-semibold text-xs border-b-2 transition ${
+                scanTab === 'text'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Paste Scrolled Post Text
+            </button>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Post Content <span className="text-rose-500">*</span>
-            </label>
-            <textarea
-              rows={8}
-              value={pastedContent}
-              onChange={e => setPastedContent(e.target.value)}
-              placeholder="Paste the Facebook job post text here..."
-              className="w-full p-3 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono leading-relaxed"
-            />
-          </div>
+          {scanTab === 'links' ? (
+            <div className="space-y-3">
+              <p className="text-slate-600">
+                Paste one or multiple <strong>real Facebook post URLs</strong> or job links (one per line). The system will fetch each page, extract job requirements, find contact emails, calculate match scores, and synthesize email drafts:
+              </p>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Facebook Post / Job URLs (One per line) <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={6}
+                  value={inputUrlsText}
+                  onChange={e => setInputUrlsText(e.target.value)}
+                  placeholder={`https://facebook.com/groups/reactjobs/posts/10192837461
+https://facebook.com/company/posts/992817263
+https://stripe.com/jobs/senior-fullstack`}
+                  className="w-full p-3 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono leading-relaxed placeholder:text-slate-400"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-slate-600">
+                Paste the text of a job post scrolled from Facebook developer groups or hiring pages:
+              </p>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" size="sm" onClick={() => setIsPasteModalOpen(false)}>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Facebook Post URL (Optional - saved for direct verification)
+                </label>
+                <input
+                  type="url"
+                  value={pastedUrl}
+                  onChange={e => setPastedUrl(e.target.value)}
+                  placeholder="https://facebook.com/groups/.../posts/..."
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Post Content Text <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={6}
+                  value={pastedContent}
+                  onChange={e => setPastedContent(e.target.value)}
+                  placeholder="Paste the Facebook post text with role details, tech stack, and email address..."
+                  className="w-full p-3 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono leading-relaxed"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <Button variant="outline" size="sm" onClick={() => setIsScanModalOpen(false)}>
               Cancel
             </Button>
             <Button
               size="sm"
-              disabled={!pastedContent.trim()}
               isLoading={isScanning}
-              onClick={() =>
-                handleTriggerScan([
-                  {
-                    content: pastedContent,
-                    postUrl: pastedUrl || null,
-                  },
-                ])
+              disabled={
+                scanTab === 'links'
+                  ? !inputUrlsText.trim()
+                  : !pastedContent.trim()
               }
+              onClick={handleProcessRealInput}
+              leftIcon={<Play className="w-3.5 h-3.5 fill-current" />}
             >
-              Analyze &amp; Process Post
+              Process &amp; Record Real Jobs
             </Button>
           </div>
         </div>

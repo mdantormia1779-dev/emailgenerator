@@ -20,6 +20,16 @@ function getGeminiClient(): GoogleGenerativeAI | null {
   return new GoogleGenerativeAI(apiKey);
 }
 
+function cleanAndParseJson<T>(rawText: string): T {
+  let cleaned = rawText.trim();
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.replace(/^```json\s*/i, '').replace(/```\s*$/, '');
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```\s*/, '').replace(/```\s*$/, '');
+  }
+  return JSON.parse(cleaned.trim()) as T;
+}
+
 /**
  * Analyzes a raw job description using Gemini AI + deterministic regex parsing for recipient emails.
  */
@@ -71,7 +81,7 @@ Return a JSON object with this exact schema:
 
     const response = await model.generateContent(prompt);
     const text = response.response.text();
-    const parsed = JSON.parse(text) as JobAnalysisResult;
+    const parsed = cleanAndParseJson<JobAnalysisResult>(text);
 
     // Combine AI-detected emails with regex-extracted emails to ensure no recipient is missed
     const allEmails = Array.from(
@@ -169,7 +179,7 @@ Output a JSON object with this exact structure:
 
     const response = await model.generateContent(prompt);
     const text = response.response.text();
-    const parsed = JSON.parse(text) as GeneratedEmail;
+    const parsed = cleanAndParseJson<GeneratedEmail>(text);
 
     const fullText = `${parsed.greeting}\n\n${parsed.body}\n\n${parsed.closing}\n${parsed.signature}`;
     const wordCount = fullText.trim().split(/\s+/).length;

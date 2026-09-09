@@ -32,50 +32,46 @@ export const Step1PasteJob: React.FC<Step1Props> = ({
     onAnalyze();
   };
 
-  const sampleJob = `Company: Stripe
-Position: Senior Full Stack Engineer (Remote)
-Location: Remote (US / Canada)
-Experience: 4+ years of professional software engineering
+  const [isFetchingUrl, setIsFetchingUrl] = useState(false);
 
-About the Role:
-We are looking for a Senior Full Stack Engineer to join our Payment Interfaces team.
-You will design and build resilient APIs and user-facing dashboards.
+  const handleFetchFromUrl = async () => {
+    if (!jobUrl || !jobUrl.trim().startsWith('http')) {
+      setError('Please enter a valid job URL starting with http:// or https://');
+      return;
+    }
 
-Responsibilities:
-- Build reliable, performant React and Next.js applications
-- Design clean RESTful and GraphQL APIs in TypeScript and Node.js
-- Collaborate with database engineers using PostgreSQL
-- Ensure high code quality and mentor junior team members
-
-Requirements:
-- Strong proficiency in TypeScript, React, Node.js, and modern web frameworks
-- Experience with relational databases like PostgreSQL
-- 4+ years building production applications
-
-Application Instructions:
-Send your resume and portfolio directly to recruiting@stripe.com or careers-team@stripe.com with your thoughts on payment UX.`;
-
-  const handleLoadSample = () => {
-    setJobDescription(sampleJob);
-    setJobUrl('https://stripe.com/jobs/senior-fullstack');
+    setIsFetchingUrl(true);
     setError(null);
+
+    try {
+      const res = await fetch('/api/jobs/fetch-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: jobUrl.trim() }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Failed to fetch job content from URL');
+      }
+
+      if (json.data && json.data.rawContent) {
+        setJobDescription(json.data.rawContent);
+      } else {
+        setError('Could not extract text from this URL. Please copy and paste the job description directly.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error fetching URL content');
+    } finally {
+      setIsFetchingUrl(false);
+    }
   };
 
   return (
     <Card className="max-w-3xl mx-auto">
       <CardHeader
         title="Step 1: Paste Job Posting"
-        subtitle="Paste the job description or requirement to analyze responsibilities, skills, and recipient emails."
-        action={
-          <button
-            type="button"
-            onClick={handleLoadSample}
-            className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold underline flex items-center gap-1"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Fill Sample Job
-          </button>
-        }
+        subtitle="Paste the job description or enter a real job URL to analyze responsibilities, skills, and recipient emails."
       />
       <CardContent className="space-y-4">
         {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
@@ -84,15 +80,27 @@ Send your resume and portfolio directly to recruiting@stripe.com or careers-team
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
             <LinkIcon className="w-3.5 h-3.5 text-slate-400" />
-            Job Posting URL (Optional)
+            Job Posting URL (Facebook Post, Career Site, or Job Link)
           </label>
-          <input
-            type="url"
-            value={jobUrl}
-            onChange={e => setJobUrl(e.target.value)}
-            placeholder="https://company.com/careers/software-engineer"
-            className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none placeholder:text-slate-400"
-          />
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={jobUrl}
+              onChange={e => setJobUrl(e.target.value)}
+              placeholder="https://facebook.com/groups/.../posts/... or https://company.com/jobs/..."
+              className="flex-1 px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none placeholder:text-slate-400"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleFetchFromUrl}
+              isLoading={isFetchingUrl}
+              disabled={!jobUrl.trim()}
+            >
+              Fetch URL
+            </Button>
+          </div>
         </div>
 
         {/* Job Description Text */}
