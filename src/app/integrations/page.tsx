@@ -41,9 +41,12 @@ function IntegrationsContent() {
         message: `Gmail OAuth authorization error: ${searchParams.get('error')}`,
       });
     } else if (searchParams?.get('meta_connected')) {
+      const emailNotice = searchParams.get('meta_notice') === 'email_not_provided'
+        ? ' (Notice: No email address was returned by Facebook profile)'
+        : '';
       setFeedback({
         type: 'success',
-        message: `Successfully connected Meta / Facebook account: ${searchParams.get('name') || ''}`,
+        message: `Successfully connected Meta / Facebook account: ${searchParams.get('name') || ''}${emailNotice}`,
       });
     } else if (searchParams?.get('meta_error')) {
       setFeedback({

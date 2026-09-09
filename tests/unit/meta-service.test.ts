@@ -11,6 +11,8 @@ import {
   getMetaUserPages,
   fetchPageFeedPosts,
   META_SCOPES,
+  META_DEFAULT_SCOPES,
+  META_PAGE_SCOPES,
 } from '@/services/meta.service';
 import { AppError } from '@/lib/errors';
 
@@ -62,7 +64,20 @@ describe('Meta Service - Unit Tests', () => {
     it('falls back to default redirect URI when not specified', () => {
       delete process.env.META_REDIRECT_URI;
       const config = getMetaConfig();
-      expect(config.redirectUri).toBe('http://localhost:3000/api/integrations/meta/callback');
+      expect(config.redirectUri).toBe('https://personalemailgenerator.vercel.app/api/integrations/meta/callback');
+    });
+  });
+
+  describe('Meta OAuth Scopes Configuration', () => {
+    it('configures initial login scopes to only public_profile and email', () => {
+      expect(META_SCOPES).toEqual(['public_profile', 'email']);
+      expect(META_DEFAULT_SCOPES).toEqual(['public_profile', 'email']);
+      expect(META_SCOPES).not.toContain('pages_show_list');
+      expect(META_SCOPES).not.toContain('pages_read_engagement');
+    });
+
+    it('keeps page scopes ready for future extension without rewriting OAuth', () => {
+      expect(META_PAGE_SCOPES).toEqual(['pages_show_list', 'pages_read_engagement']);
     });
   });
 
@@ -72,18 +87,28 @@ describe('Meta Service - Unit Tests', () => {
       expect(() => getMetaAuthUrl('csrf_token_123')).toThrow(AppError);
     });
 
-    it('generates a valid OAuth URL with client_id, state, and scopes', () => {
+    it('generates a valid OAuth URL requesting ONLY public_profile and email by default', () => {
       process.env.META_APP_ID = '1234567890';
-      process.env.META_REDIRECT_URI = 'http://localhost:3000/api/integrations/meta/callback';
+      process.env.META_REDIRECT_URI = 'https://personalemailgenerator.vercel.app/api/integrations/meta/callback';
       delete process.env.META_GRAPH_API_VERSION;
 
       const url = getMetaAuthUrl('secure_random_state');
       expect(url).toContain('https://www.facebook.com/v26.0/dialog/oauth');
       expect(url).toContain('client_id=1234567890');
+      expect(url).toContain('redirect_uri=https%3A%2F%2Fpersonalemailgenerator.vercel.app%2Fapi%2Fintegrations%2Fmeta%2Fcallback');
       expect(url).toContain('state=secure_random_state');
       expect(url).toContain('response_type=code');
-      expect(url).toContain('pages_show_list');
-      expect(url).toContain('pages_read_engagement');
+      // Verify scope parameter is URL-encoded public_profile,email
+      expect(url).toContain('scope=public_profile%2Cemail');
+      // Crucial: Must NOT contain page scopes
+      expect(url).not.toContain('pages_show_list');
+      expect(url).not.toContain('pages_read_engagement');
+    });
+
+    it('supports extensible custom/page scopes when explicitly passed', () => {
+      process.env.META_APP_ID = '1234567890';
+      const url = getMetaAuthUrl('custom_state', ['public_profile', 'email', 'pages_show_list']);
+      expect(url).toContain('scope=public_profile%2Cemail%2Cpages_show_list');
     });
   });
 

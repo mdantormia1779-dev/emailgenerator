@@ -49,11 +49,32 @@ export function getOAuthDialogUrl(): string {
   return `https://www.facebook.com/${getGraphApiVersion()}/dialog/oauth`;
 }
 
+/**
+ * Initial Meta OAuth login scopes.
+ * Standard scopes supported by default for all Meta apps without App Review.
+ */
+export const META_DEFAULT_SCOPES = [
+  'public_profile',
+  'email',
+];
+
+/**
+ * Extended page scopes required for automated Page feed reading.
+ * Kept ready so Page permissions can be added or requested incrementally
+ * once configured in the Meta Developer Dashboard.
+ */
+export const META_PAGE_SCOPES = [
+  'pages_show_list',
+  'pages_read_engagement',
+];
+
+/**
+ * Active scopes used for initial Meta Login authorization requests.
+ * Restricted to valid permissions: public_profile, email.
+ */
 export const META_SCOPES = [
   'public_profile',
   'email',
-  'pages_show_list',
-  'pages_read_engagement',
 ];
 
 export function getMetaConfig(): MetaConfig {
@@ -61,15 +82,17 @@ export function getMetaConfig(): MetaConfig {
   const appSecret = process.env.META_APP_SECRET || '';
   const redirectUri =
     process.env.META_REDIRECT_URI ||
-    'http://localhost:3000/api/integrations/meta/callback';
+    'https://personalemailgenerator.vercel.app/api/integrations/meta/callback';
 
   return { appId, appSecret, redirectUri };
 }
 
 /**
  * Builds the official Meta OAuth 2.0 authorization URL.
+ * Defaults to initial login scopes ['public_profile', 'email'].
+ * Supports passing custom/extended scopes when configured.
  */
-export function getMetaAuthUrl(state: string): string {
+export function getMetaAuthUrl(state: string, scopes: string[] = META_SCOPES): string {
   const { appId, redirectUri } = getMetaConfig();
 
   if (!appId) {
@@ -84,7 +107,7 @@ export function getMetaAuthUrl(state: string): string {
     redirect_uri: redirectUri,
     state,
     response_type: 'code',
-    scope: META_SCOPES.join(','),
+    scope: scopes.join(','),
   });
 
   return `${getOAuthDialogUrl()}?${params.toString()}`;
