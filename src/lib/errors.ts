@@ -63,6 +63,21 @@ export function formatErrorResponse(error: unknown): {
         statusCode: 409,
       };
     }
+
+    if (
+      message.includes('database_url') ||
+      message.includes('p1001') ||
+      message.includes('p1000') ||
+      message.includes('can\'t reach database server') ||
+      message.includes('connection timed out') ||
+      message.includes('econnrefused')
+    ) {
+      return {
+        success: false,
+        error: 'Database connection error. Please ensure DATABASE_URL is configured and database is reachable.',
+        statusCode: 503,
+      };
+    }
   }
 
   // Safe default

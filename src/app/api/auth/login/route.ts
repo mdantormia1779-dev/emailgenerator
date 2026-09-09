@@ -56,12 +56,16 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    const isHttps =
+      req.nextUrl.protocol === 'https:' ||
+      req.headers.get('x-forwarded-proto') === 'https';
+
     // Set secure HTTP-only cookie
     response.cookies.set({
       name: AUTH_COOKIE_NAME,
       value: token,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isHttps,
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 24 * 7, // 7 days
@@ -69,6 +73,8 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error) {
+    console.error('[Login API Route Error]:', error);
+
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { success: false, error: error.errors[0]?.message || 'Invalid input' },
