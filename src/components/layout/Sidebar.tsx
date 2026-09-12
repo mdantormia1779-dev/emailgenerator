@@ -1,31 +1,39 @@
 'use client';
 
 import React from 'react';
-import { Sparkles } from 'lucide-react';
+import { SidebarBrand } from './SidebarBrand';
 import { SidebarNav } from './SidebarNav';
 import { SidebarUserFooter } from './SidebarUserFooter';
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => {
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 min-h-screen">
-      {/* Brand */}
-      <div className="h-16 flex items-center px-6 border-b border-slate-100 gap-3">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-sm shadow-indigo-200">
-          <Sparkles className="w-5 h-5" />
-        </div>
-        <div>
-          <span className="font-bold text-slate-900 tracking-tight text-base block">JobApply AI</span>
-          <span className="text-[10px] text-slate-500 font-medium tracking-wide uppercase block -mt-1">
-            Personal Assistant
-          </span>
-        </div>
-      </div>
+    <>
+      {/* Desktop Sidebar: Sticky & Fixed Height with internal scroll */}
+      <aside className="hidden md:flex flex-col w-64 sticky top-0 h-screen flex-shrink-0 bg-white border-r border-slate-200 z-20 overflow-y-auto">
+        <SidebarBrand />
+        <SidebarNav />
+        <SidebarUserFooter />
+      </aside>
 
-      {/* Navigation Links */}
-      <SidebarNav />
-
-      {/* User Session & Safety Footers */}
-      <SidebarUserFooter />
-    </aside>
+      {/* Mobile Drawer */}
+      {isOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          <div
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
+            onClick={onClose}
+          />
+          <aside className="relative flex flex-col w-64 max-w-[80vw] bg-white h-full shadow-2xl z-10 overflow-y-auto">
+            <SidebarBrand onClose={onClose} />
+            <SidebarNav onItemClick={onClose} />
+            <SidebarUserFooter />
+          </aside>
+        </div>
+      )}
+    </>
   );
 };

@@ -25,7 +25,7 @@ const NAV_ITEMS = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
-export const SidebarNav: React.FC = () => {
+export const SidebarNav: React.FC<{ onItemClick?: () => void }> = ({ onItemClick }) => {
   const pathname = usePathname();
 
   return (
@@ -34,6 +34,9 @@ export const SidebarNav: React.FC = () => {
         const isActive =
           item.href === '/dashboard'
             ? pathname === '/dashboard' || pathname === '/'
+            : item.href === '/applications'
+            ? pathname === '/applications' ||
+              (pathname.startsWith('/applications/') && !pathname.startsWith('/applications/new'))
             : pathname.startsWith(item.href);
         const Icon = item.icon;
 
@@ -41,6 +44,7 @@ export const SidebarNav: React.FC = () => {
           <Link
             key={item.name}
             href={item.href}
+            onClick={onItemClick}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
               isActive
                 ? 'bg-indigo-50 text-indigo-700 font-semibold shadow-xs'

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { Navbar } from './Navbar';
@@ -10,7 +10,12 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   const pathname = usePathname();
   const router = useRouter();
   const { user, isLoading } = useAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isAuthPage = pathname === '/login' || pathname === '/signup';
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -29,7 +34,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
       </div>
     );
   }
@@ -40,10 +45,10 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
 
   return (
     <div className="min-h-screen flex bg-slate-50 text-slate-900">
-      <Sidebar />
+      <Sidebar isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
       <div className="flex-1 flex flex-col min-w-0">
-        <Navbar />
-        <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full">{children}</main>
+        <Navbar onToggleMobileSidebar={() => setMobileMenuOpen(prev => !prev)} />
+        <main className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">{children}</main>
       </div>
     </div>
   );

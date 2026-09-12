@@ -2,22 +2,9 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { UserSession, AuthContextType } from '@/types/auth';
 
-export interface UserSession {
-  id: string;
-  name: string;
-  email: string;
-  title?: string;
-}
-
-interface AuthContextType {
-  user: UserSession | null;
-  isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signup: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
-}
+export type { UserSession, AuthContextType };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -53,12 +40,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-
       const data = await res.json();
       if (!res.ok || !data.success) {
         return { success: false, error: data.error || 'Failed to sign in.' };
       }
-
       setUser(data.user);
       router.refresh();
       return { success: true };
@@ -74,12 +59,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password }),
       });
-
       const data = await res.json();
       if (!res.ok || !data.success) {
         return { success: false, error: data.error || 'Failed to create account.' };
       }
-
       setUser(data.user);
       router.refresh();
       return { success: true };
